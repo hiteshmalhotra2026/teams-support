@@ -1,0 +1,52 @@
+name: Discord Issue Notifications
+
+on:
+  issues:
+    types: [opened, closed, reopened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send issue notification to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+          ISSUE_ACTION: ${{ github.event.action }}
+          REPO: ${{ github.repository }}
+        run: |
+          COLOR=3447003
+          if [ "$ISSUE_ACTION" = "closed" ]; then COLOR=15158332; fi
+          if [ "$ISSUE_ACTION" = "reopened" ]; then COLOR=3066993; fi
+
+          BODY=$(jq -n \
+            --arg title "$ISSUE_TITLE" \
+            --arg url "$ISSUE_URL" \
+            --arg number "$ISSUE_NUMBER" \
+            --arg user "$ISSUE_USER" \
+            --arg action "$ISSUE_ACTION" \
+            --arg repo "$REPO" \
+            --argjson color "$COLOR" \
+            '{
+              embeds: [
+                {
+                  title: ("Issue #" + $number + " " + $action),
+                  description: $title,
+                  url: $url,
+                  color: $color,
+                  fields: [
+                    { name: "Repository", value: $repo, inline: true },
+                    { name: "Author", value: $user, inline: true }
+                  ],
+                  footer: { text: "Teams Support Issue Tracker" }
+                }
+              ]
+            }')
+
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "$BODY" \
+               "$DISCORD_WEBHOOK"
